@@ -419,6 +419,11 @@
                     <h5 class="card-title text-danger">{{ predicted }}</h5>
                     <p class="card-text">Pasien terdiagnosis {{ predicted }} gagal jantung kongestif.</p>
                     {% endif %}
+
+                    {% if prob %}
+                    <h5 class="card-title text-danger">{{ prob }}</h5>
+
+                    {% endif %}
                 </div>
             </div>
         </div>

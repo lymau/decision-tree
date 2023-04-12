@@ -30,15 +30,21 @@ def scaling(value, column, isFirstDataset):
 def preprocessing(value):
     data = {}
     if (value['dataset'] == '1'):
-        data['cholesterol'] = float(value['cholesterol'])
-        data['cholesterol'] = scaling(data['cholesterol'], 'Cholesterol', True)
-        data['resting_bp'] = float(value['resting_bp'])
-        data['resting_bp'] = scaling(data['resting_bp'], 'RestingBP', True)
-        data['max_hr'] = float(value['max_hr'])
-        data['max_hr'] = scaling(data['max_hr'], 'MaxHR', True)
-        data['oldpeak'] = float(value['oldpeak'])
-        data['oldpeak'] = scaling(data['oldpeak'], 'Oldpeak', True)
         data['age'] = int(value['age'])
+        data['cholesterol'] = float(value['cholesterol'])
+        data['resting_bp'] = float(value['resting_bp'])
+        data['max_hr'] = float(value['max_hr'])
+        data['oldpeak'] = float(value['oldpeak'])
+
+        scaler = load_model(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scaler_2.pkl'))
+        num_data = scaler.transform([[data['age'], data['resting_bp'], data['cholesterol'], data['max_hr'], data['oldpeak']]])
+
+        data['age'] = num_data[0][0]
+        data['resting_bp'] = num_data[0][1]
+        data['cholesterol'] = num_data[0][2]
+        data['max_hr'] = num_data[0][3]
+        data['oldpeak'] = num_data[0][4]
+
         data['sex_M'] = 1 if value['sex'] == 'M' else 0
         data['sex_F'] = 1 if value['sex'] == 'F' else 0
         data['exerciseangina_y'] = 1 if value['exercise_angina'] == 'Y' else 0
@@ -93,29 +99,38 @@ def preprocessing(value):
             data['st_slope_flat'] = 1
     
     else:
-        data['age'] = int(value['age'])
         data['sex'] = int(value['sex'])
         data['cp'] = int(value['cp'])
-        data['trestbps'] = float(value['trestbps'])
-        data['trestbps'] = scaling(data['trestbps'], 'trestbps', False)
-        data['chol'] = float(value['chol'])
-        data['chol'] = scaling(data['chol'], 'chol', False)
         data['fbs'] = int(value['fbs'])
         data['restecg'] = int(value['restecg'])
-        data['thalach'] = float(value['thalach'])
-        data['thalach'] = scaling(data['thalach'], 'thalach', False)
         data['exang'] = int(value['exang'])
-        data['oldpeak'] = float(value['oldpeak'])
-        data['oldpeak'] = scaling(data['oldpeak'], 'oldpeak', False)
         data['slope'] = int(value['slope'])
         data['ca'] = int(value['ca'])
         data['thal'] = int(value['thal'])
 
+        data['age'] = int(value['age'])
+        data['trestbps'] = float(value['trestbps'])
+        data['chol'] = float(value['chol'])
+        data['thalach'] = float(value['thalach'])
+        data['oldpeak'] = float(value['oldpeak'])
+
+        scaler = load_model(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scaler_1.pkl'))
+        num_data = scaler.transform([[data['age'], data['trestbps'], data['chol'], data['thalach'], data['oldpeak']]])
+
+        data['age'] = num_data[0][0]
+        data['trestbps'] = num_data[0][1]
+        data['chol'] = num_data[0][2]
+        data['thalach'] = num_data[0][3]
+        data['oldpeak'] = num_data[0][4]
+
+        pca = load_model(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pca_1.pkl'))
+        X_pca = pca.transform([[data['sex'], data['cp'], data['fbs'], data['restecg'], data['exang'], data['slope'], data['ca'], data['thal'], data['age'], data['trestbps'], data['chol'], data['thalach'], data['oldpeak']]])
+
+        return X_pca
     return data
 
 @app.route("/submit", methods=["POST"])
 def submit():
-    print(request.form['dataset'])
     if request.method == 'POST':
         data = {}     
         if (request.form['dataset'] == '1'):    
@@ -132,12 +147,18 @@ def submit():
             data['oldpeak'] = request.form.get('oldpeak')
             data['st_slope'] = request.form.get('st_slope')
 
-            model = load_model(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'model_dataset_1.pkl'))
+            model = load_model(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'best_model_2.pkl'))
 
             new_data = preprocessing(data)
 
-            result = model.predict([[new_data['age'], new_data['resting_bp'], new_data['cholesterol'], new_data['fasting_bs'], new_data['max_hr'], new_data['oldpeak'], new_data['fasting_bs'], new_data['sex_F'], new_data['sex_M'], new_data['chest_pain_type_asy'], new_data['chest_pain_type_ata'], new_data['chest_pain_type_nap'], new_data['chest_pain_type_ta'], new_data['resting_ecg_lvh'], new_data['resting_ecg_normal'], new_data['resting_ecg_st'], new_data['exerciseangina_n'], new_data['exerciseangina_n'], new_data['st_slope_down'], new_data['st_slope_flat'], new_data['st_slope_up']]])
+            to_predict = [[new_data['fasting_bs'], new_data['sex_M'], new_data['chest_pain_type_ata'], new_data['chest_pain_type_nap'], new_data['chest_pain_type_ta'], new_data['resting_ecg_normal'], new_data['resting_ecg_st'], new_data['exerciseangina_y'], new_data['st_slope_flat'], new_data['st_slope_up'], new_data['age'], new_data['resting_bp'], new_data['cholesterol'], new_data['max_hr'], new_data['oldpeak']]]
 
+            result = model.predict(to_predict)
+
+            prob = model.predict_proba(to_predict)
+
+            prob = prob[0][0] if prob[0][0] > prob[0][1] else prob[0][1]
+            
             predicted = 'Positif' if result[0] == 1 else 'Negatif'
         
         else:
@@ -156,12 +177,16 @@ def submit():
             data['ca'] = request.form.get('ca')
             data['thal'] = request.form.get('thal')
 
-            model = load_model(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'model_dataset_2.pkl'))
+            model = load_model(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'best_model_1.pkl'))
 
             new_data = preprocessing(data)
 
-            result = model.predict([[new_data['age'], new_data['sex'], new_data['cp'], new_data['trestbps'], new_data['chol'], new_data['fbs'], new_data['restecg'], new_data['thalach'], new_data['exang'], new_data['oldpeak'],new_data['slope'], new_data['ca'], new_data['thal']]])
+            result = model.predict(new_data)
+
+            prob = model.predict_proba(new_data)
 
             predicted = 'Positif' if result[0] == 1 else 'Negatif'
 
-        return render_template('index.html', predicted=predicted)
+            prob = prob[0][0] if prob[0][0] > prob[0][1] else prob[0][1]
+
+        return render_template('index.html', predicted=predicted, prob=prob)
